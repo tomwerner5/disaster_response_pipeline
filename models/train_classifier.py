@@ -138,8 +138,8 @@ def build_model():
         #'tfidf__norm': ['l1', 'l2'],
         #'multi_output_clf__estimator__hidden_layer_sizes': [1000, (1000, 500), 100, (100, 50)],
         #'multi_output_clf__estimator__alpha': [0.0001, 0.01]
-        'multi_output_clf__estimator__n_estimators': [150],
-        'multi_output_clf__estimator__max_depth': [150],
+        'multi_output_clf__estimator__n_estimators': [100],
+        'multi_output_clf__estimator__max_depth': [100],
         'multi_output_clf__estimator__min_samples_split': [2],
     }
     
@@ -178,7 +178,7 @@ def evaluate_model(model, X_test, Y_test, category_names,
 
 def save_model(model, model_filepath):
     with open(model_filepath, 'wb') as f:
-        joblib.dump(model, f, compress=3)
+        joblib.dump(model, f, compress=4)
 
 
 def main():
