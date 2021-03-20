@@ -136,17 +136,73 @@ def tokenize(text, stem_type='lemma'):
 
 
 class KmeansTransform(BaseEstimator, TransformerMixin):
+    '''
+    This class runs a k-means analysis, and stores a few extra attributes.
+    It's really just a wrapper for convenience working with pipelines. 
+    '''
     def __init__(self, n_clusters=36, init_size=1000,
                  batch_size=3000, random_state=42):
+        '''
+        The contructor for the transformer.
+
+        Parameters
+        ----------
+        n_clusters : int, optional
+            The number of clusters in the k-means analysis. The default is 36.
+        init_size : int, optional
+            The number of samples to use in initializing the mini-batch
+            k-means. The default is 1000.
+        batch_size : int, optional
+            The batch size for performing mini-batch. The default is 3000.
+        random_state : int, optional
+            Seed for reporducibility. The default is 42.
+
+        Returns
+        -------
+        None.
+
+        '''
         self.n_clusters = n_clusters
         self.init_size = init_size
         self.batch_size = batch_size
         self.random_state = random_state
 
     def fit(self, X, y=None):
+        '''
+        Fit method of the transformer. Not currently implemented.
+
+        Parameters
+        ----------
+        X : pandas dataframe
+            Data to pass to the transform method.
+        y : pandas dataframe, optional
+            Data to pass to the transform method. The default is None.
+
+        Returns
+        -------
+        self
+            A pass through function, returns itself.
+
+        '''
         return self
 
     def transform(self, X):
+        '''
+        Fit X with a k-means model, and then return the cluster that each
+        observation belongs to. Also records the centroid information.
+
+        Parameters
+        ----------
+        X : pandas dataframe
+            The data to cluster, in this case, the tf-idf matrix.
+
+        Returns
+        -------
+        list
+            A list of labels, one for each observation representing the cluster
+            it belongs to.
+
+        '''
         X_trans = X.copy()
         self.X_trans = X_trans
         self.dist = 1 - cosine_similarity(X_trans)
@@ -160,7 +216,16 @@ class KmeansTransform(BaseEstimator, TransformerMixin):
         return self.labels
 
 
-def build_kmeans():    
+def build_kmeans():
+    '''
+    Builds a pipeline for fitting the k-means transformer on the tf-idf data.
+
+    Returns
+    -------
+    pipeline : sklearn pipeline object
+        The pipeline for fitting k-means.
+
+    '''
     pipeline = Pipeline([
         ('count_vec', CountVectorizer(tokenizer=tokenize,
                                       min_df=2,
@@ -175,7 +240,40 @@ def build_kmeans():
 def build_tsne(X, pca_components=36, tsne_components=2,
                print_=True, load_previous=True, save_tsne=True,
                file_loc="tsne.pkl"):
+    '''
+    Creates (and exports or loads, if desired) the T-SNE transformation of the
+    tf-idf data. First, PCA is performed on the data to reduce the complexity
+    (as suggested in the sklearn docs). Then, T-SNE is fitted on the
+    PCA-reduced set. The T-SNE components are returned.
+
+    Parameters
+    ----------
+    X : pandas dataframe
+        The tf-idf data.
+    pca_components : int, optional
+        The number of PCA components. The default is 36.
+    tsne_components : int, optional
+        The number of T-SNE components. The default is 2.
+    print_ : bool, optional
+        Print progress along the way. The default is True.
+    load_previous : bool, optional
+        Load a previous T-SNE rather than recalculating. The default is True.
+    save_tsne : bool, optional
+        If load_previous is False, then save the model after recalculating.
+        The default is True.
+    file_loc : str, optional
+        The location to save/load the T-SNE pickle file from.
+        The default is "tsne.pkl".
+
+    Returns
+    -------
+    tsne : numpy array
+        The T-SNE result.
+
+    '''
     if load_previous:
+        # try to load the existing tsne file, if possible. Will return if
+        # successful
         try:
             if print_:
                 print("Attempting TSNE Load...")
@@ -188,17 +286,24 @@ def build_tsne(X, pca_components=36, tsne_components=2,
                           Either the file wasn't there, or there was a problem
                           with the pickle. Recreating data. Should take
                           about 5 mins.""")
+    # Otherwise...
+    # Compute PCA
     if print_:
         print("Creating PCA...")
     pca = PCA(n_components=pca_components).fit_transform(X)
+    
+    # Compute TSNE
     if print_:
         print("Creating TSNE...")
     tsne = TSNE(n_components=tsne_components).fit_transform(pca)
+    
+    # Save TSNE
     if save_tsne:
         if print_:
             print("Saving TSNE...")
         with open('tsne.pkl', 'wb') as f:
             joblib.dump(tsne, f, compress=4)
+            
     if print_:
         print("Finished TSNE...")
     return tsne
@@ -217,7 +322,6 @@ feature_list = ['id', 'message', 'original', 'genre']
 # Full X and Y
 X = df[feature_list]
 Y = df.drop(feature_list, axis=1)
-
 category_names = list(Y.columns)
 
 # load model
@@ -228,39 +332,51 @@ model = joblib.load("../models/classifier.pkl")
 @app.route('/')
 @app.route('/index')
 def index():
-    
-    # Visual 1
+    '''
+    Function to generate the homepage content
+
+    Returns
+    -------
+    template
+        Flask Template to render for web page.
+
+    '''
+    ## Visual 1 data
     genre_counts = df.groupby('genre').count()['message']
     genre_names = list(genre_counts.index)
     
-    # Visual 2
+    ## Visual 2 data
     category_counts = Y.T.sum(axis=1)       
     
-    # Visual 3
+    ## Visual 3 data
     print("Building Clusters...")
     pipe = build_kmeans()
     
+    # Fit the k-means model, store results
     pipe = pipe.fit(X['message'])
-    terms = np.array(pipe.named_steps['count_vec'].get_feature_names())
     clusters = pipe.transform(X['message'])
     
     ordered_centroids = pipe.named_steps['kmeans'].ordered_centroids
     n_clusters = pipe.named_steps['kmeans'].n_clusters
     X_trans = pipe.named_steps['kmeans'].X_trans.todense()
     
-    nwords = 10 # number of words per cluster
+    # Store tf-idf term labels
+    terms = np.array(pipe.named_steps['count_vec'].get_feature_names())
     
+    # Fit TSNE
     tsne = build_tsne(X_trans, pca_components=36, tsne_components=2,
                       print_=True, load_previous=True, save_tsne=True)
     
+    # Build datatable
+    nwords = 10 # number of words per cluster
     pop_docs = pd.DataFrame(index=range(1, n_clusters+1),
                             columns=['Top Word ' + str(i) for i in range(1, nwords+1)])
     
-    
     for i in range(1, n_clusters+1):    
         pop_docs.loc[i, :] = terms[ordered_centroids[i-1, :nwords]]
+    pop_docs.index.name = "Cluster"     
     
-    pop_docs.index.name = "Cluster"        
+    # Convert dataframe to html for datatable
     json_docs = pop_docs.to_html(table_id='topwords',
                                  classes="table table-dark")
     
@@ -311,7 +427,6 @@ def index():
                     y=tsne[:, 1],
                     mode='markers',
                     marker_color=clusters,
-                    #color=clusters,
                     text=clusters
                 )
             ],
@@ -341,6 +456,16 @@ def index():
 # web page that handles user query and displays model results
 @app.route('/go')
 def go():
+    '''
+    Function to generate the queried content
+
+    Returns
+    -------
+    template
+        Flask Template to render for web page.
+
+    '''
+    
     # save user input in query
     query = request.args.get('query', '') 
 
@@ -348,8 +473,8 @@ def go():
     classification_labels = model.predict([query])[0]
     y_prob = model.predict_proba([query])
     
+    # store all predicted results
     category_names = list(Y.columns)
-    
     classification_prob = [1-y_prob[i][0, 0] for i in range(len(y_prob))]
     classification_results = dict(zip(category_names, classification_labels))
 

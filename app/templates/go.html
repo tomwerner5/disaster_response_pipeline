@@ -26,14 +26,5 @@
             <div id="{{id}}"></div>
         {% endfor %}
     </div>
-    <!---
-    <script type="text/javascript">
-        const go_graphs = {{go_graphJSON | safe}};
-        const go_ids = {{go_ids | safe}};
-        for(let i in go_graphs) {
-            Plotly.plot(go_ids[i], go_graphs[i].data, go_graphs[i].layout);
-        }
-    </script>
-    -->
 
 {% endblock %}
