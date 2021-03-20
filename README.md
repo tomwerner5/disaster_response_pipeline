@@ -49,7 +49,7 @@ The data and models for this dashboard are stored in this repository as-is, so t
 
 5. You should see something like the following: 
 
-![Home Page](./pics/home_page.png)
+![Home Page](./pics/home_page.PNG)
 
 On the home page, you can look at the plots or type in a query for the model to predict. 
 
