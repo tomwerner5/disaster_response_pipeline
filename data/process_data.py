@@ -4,6 +4,23 @@ from sqlalchemy import create_engine
 
 
 def load_data(messages_filepath, categories_filepath):
+    '''
+    Loads the disaster reponse data from csv files, and merges them into a 
+    dataframe.
+
+    Parameters
+    ----------
+    messages_filepath : str
+        Location/filepath of messages.csv.
+    categories_filepath : str
+        Location/filepath of categories.csv.
+
+    Returns
+    -------
+    df : pandas dataframe
+        A merged dataframe containing the messages and categories data.
+
+    '''
     # load Datasets
     messages = pd.read_csv(messages_filepath)
     categories = pd.read_csv(categories_filepath)
@@ -13,6 +30,21 @@ def load_data(messages_filepath, categories_filepath):
 
 
 def clean_data(df):
+    '''
+    Performs preprocessing and cleaning steps on `df` (disaster response data).
+    
+
+    Parameters
+    ----------
+    df : pandas dataframe
+        Input data to clean.
+
+    Returns
+    -------
+    df : pandas dataframe
+        Cleaned data.
+
+    '''
     # create a dataframe of the 36 individual category columns
     categories = df.categories.str.split(';', expand=True)
     # select the first row of the categories dataframe
@@ -48,11 +80,35 @@ def clean_data(df):
 
 
 def save_data(df, database_filename):
+    '''
+    Save a dataframe to a specified sqlite database.
+
+    Parameters
+    ----------
+    df : pandas dataframe
+        Data to save to sqlite database.
+    database_filename : str
+        The location/filename of the database.
+
+    Returns
+    -------
+    None.
+
+    '''
     engine = create_engine('sqlite:///' + database_filename)
     df.to_sql(database_filename, engine, index=False)  
 
 
 def main():
+    '''
+    Performs the tasks of loading the data from csv files, cleaning the data,
+    and storing the data in a sqlite database.
+
+    Returns
+    -------
+    None.
+
+    '''
     if len(sys.argv) == 4:
 
         messages_filepath, categories_filepath, database_filepath = sys.argv[1:]

@@ -7,19 +7,22 @@ import nltk
 nltk.download('stopwords')
 nltk.download('punkt')
 nltk.download('wordnet')
-from nltk.corpus import stopwords as nltk_sw
+#from nltk.corpus import stopwords as nltk_sw
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer, SnowballStemmer
 from sklearn.metrics import (classification_report,
                              roc_auc_score, accuracy_score,
                              make_scorer)
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import (RandomForestClassifier
+                              ,GradientBoostingClassifier
+                              ,AdaBoostClassifier
+                              )
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV
 try:
     from sklearn.externals import joblib
 except (ImportError, ModuleNotFoundError):
     import joblib
-from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.multioutput import MultiOutputClassifier
@@ -27,6 +30,26 @@ from sqlalchemy import create_engine
 
 
 def load_data(database_filepath):
+    '''
+    Loads data from the sqlite database (DisasterResponse.db).
+
+    Parameters
+    ----------
+    database_filepath : str
+        The filepath for the database. Note that this is also assumed to be the
+        table name.
+
+    Returns
+    -------
+    X : pandas dataframe
+        The design matrix (disaster responses).
+    Y : pandas dataframe
+        The response values (0, 1) corresponding to categories.
+    category_names : list
+        A list of the category names.
+
+    '''
+    # Create sqlite engine
     engine = create_engine('sqlite:///' + database_filepath)
     df = pd.read_sql_table(database_filepath, con=engine)
     
@@ -44,23 +67,54 @@ def load_data(database_filepath):
 
 
 def tokenize(text, stem_type='lemma'):
-    # Normalize text
+    '''
+    Preprocess a string for inclusion in a model downstream. 
+    
+    Process includes (in order):
+        - Normalizing
+        - Tokenizing
+        - Removing Stopwords
+        - Stemming/Lemmatization
+
+    Parameters
+    ----------
+    text : str
+        A string for processing.
+    stem_type : str, optional
+        Whether to use stemming ('stem') or lemmatization ('lemma').
+        The default is 'lemma'.
+
+    Raises
+    ------
+    ValueError
+        Raised if stemmer choice is invalid.
+
+    Returns
+    -------
+    stem_tokens : list
+        A list of the processed text as tokens.
+
+    '''
+    ## Normalize text
+    
+    # Remove urls
     url_regex = 'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
     text = re.sub(url_regex, " ", text)
     
+    # Remove unneeded characters
+    # 
     # Uncomment the long regex to control special characters more specifically.
     # Originally, I had considered "'" to be an important character to keep,
     # but in the final modeling, it didn't seem to make much of a difference,
     # so the expression below is much simpler
-    #
-    #text = re.sub("([0-9\.\,\:\;\(\)\"\@\[\]\#\%\*\=\>\<\^\!\~\`\$\_\{\}\|\?\-\/\&\+\\\])", " ", text)
     text = text.lower()
+    #text = re.sub("([0-9\.\,\:\;\(\)\"\@\[\]\#\%\*\=\>\<\^\!\~\`\$\_\{\}\|\?\-\/\&\+\\\])", " ", text)
     text = re.sub("[^0-9a-z]", " ", text)
     
-    # Tokenize
+    ## Tokenize
     tokens = word_tokenize(text)
     
-    # Remove Stopwords
+    ## Remove Stopwords
     
     # Note: The below stopwords are from the nltk english set. However, due to
     # pickling issues, I had to write them out in order to have consistent 
@@ -99,7 +153,7 @@ def tokenize(text, stem_type='lemma'):
     
     tokens = [tok for tok in tokens if tok not in stopwords]
     
-    # Stem/Lemmatization
+    ## Stem/Lemmatization
     stem_tokens = []
     if stem_type is not None:
         if stem_type == 'stem':
@@ -117,32 +171,51 @@ def tokenize(text, stem_type='lemma'):
     return stem_tokens
 
 
-def build_model():    
+def build_model():
+    '''
+    Convenience function for building the model pipeline and performing
+    a grid search on that pipeline. This function returns the model before 
+    performing any fitting
+
+    Returns
+    -------
+    model : sklearn GridSearchCV object
+        The model object.
+
+    '''
+    # The pipeline was tested with a few different models. Uncomment the
+    # respective models if desired.
     pipeline = Pipeline([
         ('count_vec', CountVectorizer(tokenizer=tokenize)),
         ('tfidf', TfidfTransformer()),
-        #('multi_output_clf', MultiOutputClassifier(MLPClassifier(batch_size=32,
-        #                                                         learning_rate='adaptive',
-        #                                                         activation='relu',
-        #                                                         solver='adam',
-        #                                                         early_stopping=True)))
+        #('multi_output_clf', MultiOutputClassifier(AdaBoostClassifier(base_estimator=DecisionTreeClassifier())))
         ('multi_output_clf', MultiOutputClassifier(RandomForestClassifier()))
     ])
     
+    # Normally, more parameters could be added for a full gridsearch. To save
+    # time and pickle file size, I only gridsearch a few of the better
+    # performing parameters 
     parameters = {
         'count_vec__min_df': [2],
         'count_vec__max_df': [0.9],
-        'tfidf__use_idf': [False],
+        'tfidf__use_idf': [True],
         #'tfidf__smooth_idf': [True, False],
         #'tfidf__sublinear_tf': [True, False],
         #'tfidf__norm': ['l1', 'l2'],
-        #'multi_output_clf__estimator__hidden_layer_sizes': [1000, (1000, 500), 100, (100, 50)],
-        #'multi_output_clf__estimator__alpha': [0.0001, 0.01]
-        'multi_output_clf__estimator__n_estimators': [100],
+        'multi_output_clf__estimator__n_estimators': [50],
         'multi_output_clf__estimator__max_depth': [100],
-        'multi_output_clf__estimator__min_samples_split': [2],
+        'multi_output_clf__estimator__bootstrap': [False]
+        
+        # For the Adaboost classifier only
+        #'multi_output_clf__estimator__base_estimator__n_estimators': [10],
+        #'multi_output_clf__estimator__base_estimator__max_depth': [3, 10, 50, 100],
+        #'multi_output_clf__estimator__base_estimator__splitter': ['best', 'random'],
+        #'multi_output_clf__estimator__base_estimator__max_features': ['auto'],
     }
     
+    # Normally, I would train this with a higher cv number, but since this is 
+    # mainly for demonstration, and I only have one set of parameters in the 
+    # pipeline, I set cv=2 for faster training
     model = GridSearchCV(estimator=pipeline, param_grid=parameters,
                          verbose=3,
                          cv=2
@@ -153,6 +226,30 @@ def build_model():
 
 def evaluate_model(model, X_test, Y_test, category_names,
                   print_=True, return_=False):
+    '''
+    Evaluate the model performance
+
+    Parameters
+    ----------
+    model : sklearn GridSearchCV object
+        The model to evaluate.
+    X_test : pandas dataframe or numpy array
+        The design matrix of the test dataset to evaluate.
+    Y_test : pandas dataframe or numpy array
+        The response values of the test set to evaluate.
+    category_names : list
+        A list of the category names.
+    print_ : bool, optional
+        Print the results to the console. The default is True.
+    return_ : bool, optional
+        Return the results as a dictionary. The default is False.
+
+    Returns
+    -------
+    reports : dict
+        A dictionary of model results.
+
+    '''
     y_pred = pd.DataFrame(model.predict(X_test), columns=category_names)
     y_prob_list = model.predict_proba(X_test)
     y_prob = {cat: 1-y_prob_list[i][:, 0] for i, cat in enumerate(category_names)}
@@ -177,11 +274,35 @@ def evaluate_model(model, X_test, Y_test, category_names,
 
 
 def save_model(model, model_filepath):
+    '''
+    Save the model to a pickle file
+
+    Parameters
+    ----------
+    model : sklearn GridSearchCV object
+        The model to save.
+    model_filepath : str
+        The directory and filename (path) to save the model to.
+
+    Returns
+    -------
+    None.
+
+    '''
     with open(model_filepath, 'wb') as f:
         joblib.dump(model, f, compress=4)
 
 
 def main():
+    '''
+    The main() function loads the disaster response data from the sqlite
+    database, trains the model, evaluates the model, and saves the model
+
+    Returns
+    -------
+    None.
+
+    '''
     if len(sys.argv) == 3:
         database_filepath, model_filepath = sys.argv[1:]
         print('Loading data...\n    DATABASE: {}'.format(database_filepath))
