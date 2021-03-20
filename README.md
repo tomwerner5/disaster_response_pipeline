@@ -43,13 +43,13 @@ The data and models for this dashboard are stored in this repository as-is, so t
 
     If successful, the terminal will look something like this:
     
-    ![Successful Flask Deployment](pics/flask_deployment.png)
+    ![Successful Flask Deployment](./pics/flask_deployment.png)
 
 4. Go to the address defined in the terminal. It will likely be either `http://0.0.0.0:3001/` or `http://127.0.0.1:3001/`
 
 5. You should see something like the following: 
 
-![Home Page](pics/home_page.png)
+![Home Page](./pics/home_page.png)
 
 On the home page, you can look at the plots or type in a query for the model to predict. 
 
