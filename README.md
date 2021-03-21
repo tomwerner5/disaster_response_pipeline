@@ -33,8 +33,9 @@ The data and models for this dashboard are stored in this repository as-is, so t
 
     - To run ETL pipeline that cleans data and stores in database
         `python data/process_data.py data/disaster_messages.csv data/disaster_categories.csv data/DisasterResponse.db`
-    - To run ML pipeline that trains classifier and saves
+    - To run ML pipeline that trains classifier and saves the model
         `python models/train_classifier.py data/DisasterResponse.db models/classifier.pkl`
+        - Note: it is important that the database definition in the ETL step is the same (including full path) as the ML pipeline step. For example, if `data/DisasterResponse.db` is used in the ETL step, then it must also be used explicitly the same in the ML pipeline step.
 
 2. Run `cd app` to switch to the app directory.
 
